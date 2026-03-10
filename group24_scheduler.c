@@ -181,8 +181,15 @@ void arrival(process_t *p) {
 void admit_process(void) {
     // keep going until submission queue is empty
     while(1) {
-        // check if resources and memory available for head of submission queue
-        if(resource_available(queue_peek(&sub_queue)) || memory_can_allocate(queue_peek(&sub_queue))) return;
+        if(queue_empty(&sub_queue)) return;
+
+        process_t *head = queue_peek(&sub_queue);
+
+        // resource_available() returns 1 when resources are NOT sufficient.
+        // memory_can_allocate() returns 1 when memory IS available.
+        // Stop admitting if resources are insufficient OR memory cannot be allocated.
+        if(resource_available(head) || !memory_can_allocate(head->mem_req)) return;
+
         process_t* new_process = queue_pop(&sub_queue); // pop the process out of the queue if resources and memory are available
 
         // allocate resources and memory
@@ -242,25 +249,88 @@ int termination_check(int processNo, int process_count, process_t *cur_running_r
  * ========================================================= */
 
 void memory_init(void) {
-    /* OPTIONAL */
+    /* Create one free block covering the entire user memory region [64, 1023] (960 MB).
+     * The real-time region [0, 63] is permanently reserved and not tracked here. */
+    freelist = (free_block_t *)malloc(sizeof(free_block_t));
+    freelist->start = 64;
+    freelist->size  = 960;
+    freelist->next  = NULL;
 }
 
 int memory_can_allocate(int req_size) {
-    /* OPTIONAL */
-    (void)req_size;
+    /* Scan the free list from lowest address; return 1 if any block can satisfy req_size. */
+    free_block_t *curr = freelist;
+    while (curr != NULL) {
+        if (curr->size >= req_size) return 1;
+        curr = curr->next;
+    }
     return 0;
 }
 
 int memory_allocate(process_t *p) {
-    /* OPTIONAL */
-    (void)p;
-    return -1;
+    /* First Fit: scan from the lowest address, pick the first block >= p->mem_req.
+     * Allocate from the LOW end of that block (per lab spec).
+     * If the block is larger, split it: remainder becomes a new free block starting
+     * at (original_start + req_size). */
+    free_block_t *curr = freelist;
+    free_block_t *prev = NULL;
+
+    while (curr != NULL) {
+        if (curr->size >= p->mem_req) {
+            p->mem_start = curr->start;   /* take from the low end */
+
+            if (curr->size == p->mem_req) {
+                /* Exact fit: remove the block entirely */
+                if (prev == NULL) freelist    = curr->next;
+                else              prev->next  = curr->next;
+                free(curr);
+            } else {
+                /* Partial fit: shrink the block from the low end */
+                curr->start += p->mem_req;
+                curr->size  -= p->mem_req;
+            }
+            return 0; /* success */
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+    return -1; /* no suitable block found */
 }
 
 int memory_free(process_t *p) {
-    /* OPTIONAL */
-    (void)p;
-    return -1;
+    /* Create a new free block for the released memory. */
+    free_block_t *blk = (free_block_t *)malloc(sizeof(free_block_t));
+    blk->start = p->mem_start;
+    blk->size  = p->mem_req;
+    blk->next  = NULL;
+
+    /* Insert into the free list in strictly ascending start-address order. */
+    free_block_t *curr = freelist;
+    free_block_t *prev = NULL;
+    while (curr != NULL && curr->start < blk->start) {
+        prev = curr;
+        curr = curr->next;
+    }
+    blk->next = curr;
+    if (prev == NULL) freelist   = blk;
+    else              prev->next = blk;
+
+    /* Coalesce with the NEXT block if adjacent. */
+    if (blk->next != NULL && blk->start + blk->size == blk->next->start) {
+        free_block_t *to_merge = blk->next;
+        blk->size += to_merge->size;
+        blk->next  = to_merge->next;
+        free(to_merge);
+    }
+
+    /* Coalesce with the PREV block if adjacent. */
+    if (prev != NULL && prev->start + prev->size == blk->start) {
+        prev->size += blk->size;
+        prev->next  = blk->next;
+        free(blk);
+    }
+
+    return 0;
 }
 
 /*
