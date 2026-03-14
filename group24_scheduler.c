@@ -169,58 +169,87 @@ void print_log(process_t *ready_process, int time) {
  * ========================================================= */
 
 void arrival(process_t *p) {
-    if(p -> init_prio == 0) {
-        queue_push(&rt_queue, p);
-        p -> state = READY;
-    } else {
-        queue_push(&sub_queue, p);
-        p -> state = SUBMITTED;
-    }
+    /* TODO */
+    (void)p;
 }
 
 void admit_process(void) {
-    // keep going until submission queue is empty
-    while(1) {
-        // check if resources and memory available for head of submission queue
-        if(resource_available(queue_peek(&sub_queue)) || memory_can_allocate(queue_peek(&sub_queue))) return;
-        process_t* new_process = queue_pop(&sub_queue); // pop the process out of the queue if resources and memory are available
-
-        // allocate resources and memory
-        memory_allocate(new_process); // I'm gonna leave this to you Zeyad
-        resource_occupy(new_process);
-
-        // assign to corresponding queue
-        if(new_process -> init_prio == 1) queue_push(&user_queue[0], new_process);
-        else if(new_process -> init_prio == 2) queue_push(&user_queue[1], new_process);
-        else if(new_process -> init_prio == 3) queue_push(&user_queue[2], new_process);
-        else {
-            perror("Process priority out of bounds. ");
-            return; // not sure if we should return here
-        }
-        new_process -> state = READY;
-
-        // stop if submission queue is empty
-        if(queue_empty(&sub_queue)) {
-            return;
-        }
-    }
+    /* TODO */
 }
 
 process_t *dispatch(process_t **cur_running_rt) {
-    /* TODO */
-    (void)cur_running_rt;
+    if (*cur_running_rt != NULL) {
+        return *cur_running_rt;
+    }
+
+    if (!queue_empty(&rt_queue)) {
+        *cur_running_rt = queue_pop(&rt_queue);
+        return *cur_running_rt;
+    }
+
+    if (!queue_empty(&user_queue[0])) {
+        return queue_pop(&user_queue[0]);
+    }
+
+    if (!queue_empty(&user_queue[1])) {
+        return queue_pop(&user_queue[1]);
+    }
+
+    if (!queue_empty(&user_queue[2])) {
+        return queue_pop(&user_queue[2]);
+    }
+
     return NULL;
 }
 
+
 void run_process(process_t *p) {
-    /* TODO */
-    (void)p;
+    if (p == NULL) {
+        return;
+    }
+
+    p->state = RUNNING;
+    p->cpu_remain--;
 }
 
+
 void post_run(process_t *p, process_t **cur_running_rt) {
-    /* TODO */
-    (void)p;
-    (void)cur_running_rt;
+    if (p == NULL) {
+        return;
+    }
+
+    /* If the process finished, terminate it */
+    if (p->cpu_remain == 0) {
+        p->state = TERMINATED;
+
+        /* Clear RT pointer if the finished process was real-time */
+        if (p->current_prio == 0) {
+            *cur_running_rt = NULL;
+        }
+
+        return;
+    }
+
+    /* Real-time process continues until completion */
+    if (p->current_prio == 0) {
+        *cur_running_rt = p;
+        return;
+    }
+
+    /* User process did not finish: demote and requeue */
+    p->state = READY;
+
+    if (p->current_prio == 1) {
+        p->current_prio = 2;
+        queue_push(&user_queue[1], p);
+    } else if (p->current_prio == 2) {
+        p->current_prio = 3;
+        queue_push(&user_queue[2], p);
+    } else {
+        /* priority 3 stays at priority 3 */
+        p->current_prio = 3;
+        queue_push(&user_queue[2], p);
+    }
 }
 
 
@@ -263,35 +292,20 @@ int memory_free(process_t *p) {
     return -1;
 }
 
-/*
-    This helper function determines if there are enough resources to run the process.
-*/
 int resource_available(process_t *p) {
-    if(p -> printers > printers) return 1;
-    if(p -> scanners > scanners) return 1;
-    if(p -> modems > modems) return 1;
-    if(p -> cds > cd_drives) return 1;
+    /* OPTIONAL */
+    (void)p;
     return 0;
 }
 
-/*
-    This helper function modifies our current resources to simulate the resources being occupied.
-*/
 void resource_occupy(process_t *p) {
-    printers -= p -> printers;
-    scanners -= p -> scanners;
-    modems -= p -> modems;
-    cd_drives -= p -> cds;
+    /* OPTIONAL */
+    (void)p;
 }
 
-/*
-    This helper function replenishes resources.
-*/
 void resource_free(process_t *p) {
-    printers += p -> printers;
-    scanners += p -> scanners;
-    modems += p -> modems;
-    cd_drives += p -> cds;
+    /* OPTIONAL */
+    (void)p;
 }
 
 
