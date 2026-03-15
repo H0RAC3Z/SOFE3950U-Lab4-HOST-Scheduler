@@ -188,12 +188,12 @@ void admit_process(void) {
         // resource_available() returns 1 when resources are NOT sufficient.
         // memory_can_allocate() returns 1 when memory IS available.
         // Stop admitting if resources are insufficient OR memory cannot be allocated.
-        if(resource_available(head) || !memory_can_allocate(head->mem_req)) return;
+        if(!resource_available(head) || !memory_can_allocate(head->mem_req)) return;
 
         process_t* new_process = queue_pop(&sub_queue); // pop the process out of the queue if resources and memory are available
 
         // allocate resources and memory
-        memory_allocate(new_process); // I'm gonna leave this to you Zeyad
+        memory_allocate(new_process);
         resource_occupy(new_process);
 
         // assign to corresponding queue
@@ -395,11 +395,11 @@ int memory_free(process_t *p) {
     This helper function determines if there are enough resources to run the process.
 */
 int resource_available(process_t *p) {
-    if(p -> printers > printers) return 1;
-    if(p -> scanners > scanners) return 1;
-    if(p -> modems > modems) return 1;
-    if(p -> cds > cd_drives) return 1;
-    return 0;
+    if(p -> printers > printers) return 0; // not enough resources
+    if(p -> scanners > scanners) return 0;
+    if(p -> modems > modems) return 0;
+    if(p -> cds > cd_drives) return 0;
+    return 1; // enough resources
 }
 
 /*
