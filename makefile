@@ -1,6 +1,6 @@
 # Simple Makefile for Lab 4 Scheduler
-#make        -compile, generate ./groupX
-#make clean  -remove ./groupX
+#make        -compile, generate ./group24
+#make clean  -remove ./group24
 
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11

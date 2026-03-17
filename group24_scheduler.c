@@ -1,13 +1,7 @@
 /*
  * Lab 4 - Scheduler
  *
- * IMPORTANT:
- * - Do NOT change print_log() format (autograder / TA diff expects exact output).
- * - Do NOT change the order of operations in the main tick loop.
- * - You may change internal implementations of the TODO functions freely,
- *   as long as behavior matches the lab requirements.
- * - compile: $make
- *   run testcase: $./groupX_scheduler < test_input.txt
+ * Authors: Zeyad Ghazal, Avam Neupane, Omar Ahmed, Horace Zeng
  */
 
 #include <stdio.h>
@@ -101,40 +95,37 @@ typedef struct free_block {
 } free_block_t;
 
 /* =========================================================
- * REQUIRED FUNCTIONS (MUST IMPLEMENT)
+ * MAIN FUNCTIONS
  * =========================================================
- * These functions are called directly by main() in this skeleton.
- * You MUST provide implementations with the same signatures.
+ * These functions are called directly by main().
  */
 
-void memory_init(void);                       /* Initialize your memory manager state. */
-void admit_process(void);                     /* Admit user jobs from sub_queue to user queues when possible. */
-process_t *dispatch(process_t **cur_running_rt); /* Select the process to run this tick. */
-void run_process(process_t *p);               /* Run the selected process for exactly 1 tick. */
-void post_run(process_t *p, process_t **cur_running_rt); /* Handle completion / re-queue after 1 tick. */
-int termination_check(int processNo, int process_count, process_t *cur_running_rt); /* Return 1 if simulation ends. */
+void memory_init(void); // initialize your memory manager state
+void admit_process(void); // admit user jobs from sub_queue to user queues when possible
+process_t *dispatch(process_t **cur_running_rt); // select the process to run this tick
+void run_process(process_t *p); // run the selected process for exactly 1 tick
+void post_run(process_t *p, process_t **cur_running_rt); // handle completion / re-queue after 1 tick
+int termination_check(int processNo, int process_count, process_t *cur_running_rt); // return 1 if simulation ends
 
 
 /* =========================================================
- * OPTIONAL HELPER FUNCTIONS (OPTIONAL TO IMPLEMENT/USE)
+ * HELPER FUNCTIONS
  * =========================================================
- * You may implement these helpers, change their behavior, or ignore them entirely.
- * They exist only to suggest a clean decomposition; you can inline logic elsewhere.
- * (Especially for memory: any correct approach is allowed.)
+ * These functions provide external help to the main functions to provide neater code.
  */
 
-/* ---- Memory helpers (optional) ---- */
-int memory_can_allocate(int req_size);        /* Optional: check if req_size can be allocated now. */
-int memory_allocate(process_t *p);            /* Optional: allocate memory for a user process and set p->mem_start. */
-int memory_free(process_t *p);                /* Optional: free a user process memory block. */
+/* ---- Memory Helpers ---- */
+int memory_can_allocate(int req_size); // check if req_size can be allocated now
+int memory_allocate(process_t *p); // allocate memory for a user process and set p -> mem_start
+int memory_free(process_t *p); // free a user process memory block
 
-/* ---- Resource helpers (optional) ---- */
-int resource_available(process_t *p);         /* Optional: check if resources are available. */
-void resource_occupy(process_t *p);           /* Optional: reserve resources for an admitted user process. */
-void resource_free(process_t *p);             /* Optional: release resources when a process terminates. */
+/* ---- Resource Helpers ---- */
+int resource_available(process_t *p); // check if resources are available
+void resource_occupy(process_t *p); // reserve resources for an admitted user process
+void resource_free(process_t *p); // release resources when a process terminates
 
-/* ---- Arrival helper (optional) ---- */
-void arrival(process_t *p);                   /* Optional: enqueue a newly arrived process. */
+/* ---- Arrival Helper ---- */
+void arrival(process_t *p); // enqueue a newly arrived process
 
 
 /* =========================================================
@@ -165,30 +156,30 @@ void print_log(process_t *ready_process, int time) {
 
 
 /* =========================================================
- * REQUIRED FUNCTION STUBS (STUDENTS MUST COMPLETE)
+ * MAIN FUNCTION STUBS
  * ========================================================= */
 
 void arrival(process_t *p) {
-    if(p -> init_prio == 0) {
+    if(p -> init_prio == 0) { // based on initial priority, sends process straight to real time queue if 0
         queue_push(&rt_queue, p);
-        p -> state = READY;
-    } else {
-        queue_push(&sub_queue, p);
-        p -> state = SUBMITTED;
+        p -> state = READY; // set state to be able to run immediately because we bypass the submission queue
+    } else { // otherwise, send to submission queue
+        queue_push(&sub_queue, p); // add to the end of submission queue for FCFS
+        p -> state = SUBMITTED; // set state to submitted meaning that the process is sent to submission queue
     }
 }
 
 void admit_process(void) {
     // keep going until submission queue is empty
     while(1) {
-        if(queue_empty(&sub_queue)) return;
+        if(queue_empty(&sub_queue)) return; // stop if submission queue empty
 
-        process_t *head = queue_peek(&sub_queue);
+        process_t *head = queue_peek(&sub_queue); // set pointer to peek at the submission queue's first index, important to note that this doesn't pop the process from the queue
 
-        // resource_available() returns 1 when resources are NOT sufficient.
+        // resource_available() returns 1 when resources ARE sufficient.
         // memory_can_allocate() returns 1 when memory IS available.
-        // Stop admitting if resources are insufficient OR memory cannot be allocated.
-        if(!resource_available(head) || !memory_can_allocate(head->mem_req)) return;
+        // stop admitting if resources are not sufficient OR memory cannot be allocated.
+        if(!resource_available(head) || !memory_can_allocate(head -> mem_req)) return;
 
         process_t* new_process = queue_pop(&sub_queue); // pop the process out of the queue if resources and memory are available
 
@@ -196,94 +187,87 @@ void admit_process(void) {
         memory_allocate(new_process);
         resource_occupy(new_process);
 
-        // assign to corresponding queue
+        // assign to corresponding queue, real time priorities are already caught within arrival function
         if(new_process -> init_prio == 1) queue_push(&user_queue[0], new_process);
         else if(new_process -> init_prio == 2) queue_push(&user_queue[1], new_process);
         else if(new_process -> init_prio == 3) queue_push(&user_queue[2], new_process);
         else {
-            perror("Process priority out of bounds. ");
-            return; // not sure if we should return here
-        }
-        new_process -> state = READY;
-
-        // stop if submission queue is empty
-        if(queue_empty(&sub_queue)) {
+            perror("Process priority out of bounds. "); // error handling
             return;
         }
+        new_process -> state = READY; // set state of process to "ready to be executed"
     }
 }
 
 process_t *dispatch(process_t **cur_running_rt) {
-    if (*cur_running_rt != NULL) {
+    if (*cur_running_rt != NULL) { // if still running real time process, continue running it
         return *cur_running_rt;
     }
 
-    if (!queue_empty(&rt_queue)) {
+    if (!queue_empty(&rt_queue)) { // run a process from real time queue
         *cur_running_rt = queue_pop(&rt_queue);
         return *cur_running_rt;
     }
 
-    if (!queue_empty(&user_queue[0])) {
+    if (!queue_empty(&user_queue[0])) { // run a process from level 1 user queue
         return queue_pop(&user_queue[0]);
     }
 
-    if (!queue_empty(&user_queue[1])) {
+    if (!queue_empty(&user_queue[1])) { // run a process from level 2 user queue
         return queue_pop(&user_queue[1]);
     }
 
-    if (!queue_empty(&user_queue[2])) {
+    if (!queue_empty(&user_queue[2])) { // run a process from level 3 user queue
         return queue_pop(&user_queue[2]);
     }
 
     return NULL;
 }
 
-
 void run_process(process_t *p) {
-    if (p == NULL) {
-        return;
-    }
+    if (p == NULL) return; // no process to run
 
-    p->state = RUNNING;
-    p->cpu_remain--;
+    p -> state = RUNNING; // current process running
+    p -> cpu_remain--; // tick decrements process' remaining run time
 }
 
 
 void post_run(process_t *p, process_t **cur_running_rt) {
-    if (p == NULL) {
-        return;
-    }
+    if (p == NULL) return; // no process to process
 
-    /* If the process finished, terminate it */
-    if (p->cpu_remain == 0) {
-        p->state = TERMINATED;
+    /* If the process finished, terminate it. */
+    if (p -> cpu_remain == 0) {
+        p -> state = TERMINATED; // process is set to terminated
 
-        /* Clear RT pointer if the finished process was real-time */
-        if (p->current_prio == 0) {
+        /* Clear RT pointer if the finished process was real-time. */
+        if (p -> current_prio == 0) {
             *cur_running_rt = NULL;
+        } else { // free resources and memory for non-RT processes that are terminated
+            resource_free(p);
+            memory_free(p);
         }
 
         return;
     }
 
-    /* Real-time process continues until completion */
-    if (p->current_prio == 0) {
+    /* Real-time process continues until completion. */
+    if (p -> current_prio == 0) {
         *cur_running_rt = p;
         return;
     }
 
-    /* User process did not finish: demote and requeue */
-    p->state = READY;
+    /* User process did not finish: Demote and requeue. */
+    p -> state = READY;
 
-    if (p->current_prio == 1) {
-        p->current_prio = 2;
+    if (p -> current_prio == 1) {
+        p -> current_prio = 2;
         queue_push(&user_queue[1], p);
-    } else if (p->current_prio == 2) {
-        p->current_prio = 3;
+    } else if (p -> current_prio == 2) {
+        p -> current_prio = 3;
         queue_push(&user_queue[2], p);
     } else {
-        /* priority 3 stays at priority 3 */
-        p->current_prio = 3;
+        /* priority 3 stays at priority 3. */
+        p -> current_prio = 3;
         queue_push(&user_queue[2], p);
     }
 }
@@ -303,97 +287,94 @@ int termination_check(int processNo, int process_count, process_t *cur_running_r
 
 
 /* =========================================================
- * OPTIONAL FUNCTION STUBS (YOU MAY USE OR IGNORE)
+ * HELPER FUNCTION STUBS
  * ========================================================= */
 
+/* Create one free block covering the entire user memory region [64, 1023] (960 MB).
+ * The real-time region [0, 63] is permanently reserved and not tracked here. */
 void memory_init(void) {
-    /* Create one free block covering the entire user memory region [64, 1023] (960 MB).
-     * The real-time region [0, 63] is permanently reserved and not tracked here. */
     freelist = (free_block_t *)malloc(sizeof(free_block_t));
-    freelist->start = 64;
-    freelist->size  = 960;
-    freelist->next  = NULL;
+    freelist -> start = 64;
+    freelist -> size  = 960;
+    freelist -> next  = NULL;
 }
 
+/* Scan the free list from lowest address; return 1 if any block can satisfy req_size. */
 int memory_can_allocate(int req_size) {
-    /* Scan the free list from lowest address; return 1 if any block can satisfy req_size. */
     free_block_t *curr = freelist;
     while (curr != NULL) {
-        if (curr->size >= req_size) return 1;
-        curr = curr->next;
+        if (curr -> size >= req_size) return 1;
+        curr = curr -> next;
     }
     return 0;
 }
 
+/* First Fit: scan from the lowest address, pick the first block >= p -> mem_req.
+ * Allocate from the LOW end of that block (per lab spec).
+ * If the block is larger, split it: remainder becomes a new free block starting
+ * at (original_start + req_size). */
 int memory_allocate(process_t *p) {
-    /* First Fit: scan from the lowest address, pick the first block >= p->mem_req.
-     * Allocate from the LOW end of that block (per lab spec).
-     * If the block is larger, split it: remainder becomes a new free block starting
-     * at (original_start + req_size). */
     free_block_t *curr = freelist;
     free_block_t *prev = NULL;
 
     while (curr != NULL) {
-        if (curr->size >= p->mem_req) {
-            p->mem_start = curr->start;   /* take from the low end */
+        if (curr -> size >= p -> mem_req) {
+            p -> mem_start = curr -> start;   /* take from the low end */
 
-            if (curr->size == p->mem_req) {
+            if (curr -> size == p -> mem_req) {
                 /* Exact fit: remove the block entirely */
-                if (prev == NULL) freelist    = curr->next;
-                else              prev->next  = curr->next;
+                if (prev == NULL) freelist = curr -> next;
+                else prev -> next = curr -> next;
                 free(curr);
             } else {
                 /* Partial fit: shrink the block from the low end */
-                curr->start += p->mem_req;
-                curr->size  -= p->mem_req;
+                curr -> start += p -> mem_req;
+                curr -> size -= p -> mem_req;
             }
-            return 0; /* success */
+            return 0; // success
         }
         prev = curr;
-        curr = curr->next;
+        curr = curr -> next;
     }
-    return -1; /* no suitable block found */
+    return -1; // no suitable block found
 }
 
 int memory_free(process_t *p) {
     /* Create a new free block for the released memory. */
     free_block_t *blk = (free_block_t *)malloc(sizeof(free_block_t));
-    blk->start = p->mem_start;
-    blk->size  = p->mem_req;
-    blk->next  = NULL;
+    blk -> start = p -> mem_start;
+    blk -> size  = p -> mem_req;
+    blk -> next  = NULL;
 
     /* Insert into the free list in strictly ascending start-address order. */
     free_block_t *curr = freelist;
     free_block_t *prev = NULL;
-    while (curr != NULL && curr->start < blk->start) {
+    while (curr != NULL && curr -> start < blk -> start) {
         prev = curr;
-        curr = curr->next;
+        curr = curr -> next;
     }
-    blk->next = curr;
-    if (prev == NULL) freelist   = blk;
-    else              prev->next = blk;
+    blk -> next = curr;
+    if (prev == NULL) freelist = blk;
+    else prev -> next = blk;
 
     /* Coalesce with the NEXT block if adjacent. */
-    if (blk->next != NULL && blk->start + blk->size == blk->next->start) {
-        free_block_t *to_merge = blk->next;
-        blk->size += to_merge->size;
-        blk->next  = to_merge->next;
+    if (blk -> next != NULL && blk -> start + blk -> size == blk -> next -> start) {
+        free_block_t *to_merge = blk -> next;
+        blk -> size += to_merge -> size;
+        blk -> next = to_merge -> next;
         free(to_merge);
     }
 
     /* Coalesce with the PREV block if adjacent. */
-    if (prev != NULL && prev->start + prev->size == blk->start) {
-        prev->size += blk->size;
-        prev->next  = blk->next;
+    if (prev != NULL && prev -> start + prev -> size == blk -> start) {
+        prev -> size += blk -> size;
+        prev -> next = blk -> next;
         free(blk);
     }
 
     return 0;
 }
 
-/*
-    This helper function determines if there are enough resources to run the process.
-*/
 int resource_available(process_t *p) {
     if(p -> printers > printers) return 0; // not enough resources
     if(p -> scanners > scanners) return 0;
@@ -402,20 +383,16 @@ int resource_available(process_t *p) {
     return 1; // enough resources
 }
 
-/*
-    This helper function modifies our current resources to simulate the resources being occupied.
-*/
 void resource_occupy(process_t *p) {
+    // occupy I/O resources
     printers -= p -> printers;
     scanners -= p -> scanners;
     modems -= p -> modems;
     cd_drives -= p -> cds;
 }
 
-/*
-    This helper function replenishes resources.
-*/
 void resource_free(process_t *p) {
+    // replenish resources
     printers += p -> printers;
     scanners += p -> scanners;
     modems += p -> modems;
